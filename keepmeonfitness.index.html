@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FitKeep</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'DM Sans', sans-serif; background: #0e0e10; color: #f0ede6; min-height: 100vh; }
+  .app { display: flex; flex-direction: column; min-height: 100vh; }
+  .nav { display: flex; align-items: center; justify-content: space-between; padding: 16px 24px; border-bottom: 0.5px solid #2a2a2e; background: #0e0e10; position: sticky; top: 0; z-index: 10; }
+  .nav-logo { font-family: 'Syne', sans-serif; font-size: 20px; font-weight: 700; color: #f0ede6; letter-spacing: -0.5px; }
+  .nav-logo span { color: #7f77dd; }
+  .nav-tabs { display: flex; gap: 4px; background: #1a1a1e; border-radius: 10px; padding: 4px; }
+  .tab-btn { padding: 7px 18px; border-radius: 7px; border: none; cursor: pointer; font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 500; transition: all 0.15s; background: transparent; color: #888; }
+  .tab-btn.active { background: #7f77dd; color: #fff; }
+  .main { flex: 1; padding: 24px; max-width: 900px; width: 100%; margin: 0 auto; }
+  .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+  .section-title { font-family: 'Syne', sans-serif; font-size: 22px; font-weight: 700; color: #f0ede6; }
+  .add-btn { background: #7f77dd; color: #fff; border: none; border-radius: 8px; padding: 8px 16px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: 'DM Sans', sans-serif; transition: background 0.15s; }
+  .add-btn:hover { background: #6a62c4; }
+  .add-btn:disabled { background: #2a2a2e; color: #555; cursor: not-allowed; }
+
+  /* TOAST */
+  .toast { position: fixed; bottom: 24px; right: 24px; background: #1e1a3a; border: 0.5px solid #7f77dd; color: #afa9ec; padding: 12px 20px; border-radius: 10px; font-size: 13px; z-index: 999; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
+  .toast.show { opacity: 1; }
+  .toast.error { background: #2e1410; border-color: #f0997b; color: #f0997b; }
+
+  /* NOTES */
+  .notes-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 14px; }
+  .note-card { border-radius: 12px; padding: 16px; min-height: 120px; position: relative; cursor: pointer; transition: transform 0.15s; }
+  .note-card:hover { transform: translateY(-2px); }
+  .note-card .note-title { font-family: 'Syne', sans-serif; font-size: 14px; font-weight: 600; margin-bottom: 8px; }
+  .note-card .note-body { font-size: 13px; line-height: 1.6; opacity: 0.85; }
+  .note-card .note-delete { position: absolute; top: 10px; right: 10px; background: rgba(0,0,0,0.25); border: none; color: #fff; border-radius: 50%; width: 22px; height: 22px; font-size: 12px; cursor: pointer; display: none; align-items: center; justify-content: center; }
+  .note-card:hover .note-delete { display: flex; }
+  .color-yellow { background: #3a3010; color: #fac775; }
+  .color-yellow .note-title { color: #fac775; }
+  .color-teal { background: #0a2a20; color: #5dcaa5; }
+  .color-teal .note-title { color: #5dcaa5; }
+  .color-purple { background: #1e1a3a; color: #afa9ec; }
+  .color-purple .note-title { color: #afa9ec; }
+  .color-coral { background: #2e1410; color: #f0997b; }
+  .color-coral .note-title { color: #f0997b; }
+  .color-blue { background: #0a1e30; color: #85b7eb; }
+  .color-blue .note-title { color: #85b7eb; }
+
+  .note-form { background: #1a1a1e; border: 0.5px solid #2a2a2e; border-radius: 14px; padding: 20px; margin-bottom: 24px; display: none; }
+  .note-form.open { display: block; }
+  .note-form input, .note-form textarea { width: 100%; background: #0e0e10; border: 0.5px solid #2a2a2e; border-radius: 8px; padding: 10px 14px; color: #f0ede6; font-family: 'DM Sans', sans-serif; font-size: 14px; margin-bottom: 12px; }
+  .note-form textarea { min-height: 80px; resize: none; }
+  .note-form input::placeholder, .note-form textarea::placeholder { color: #555; }
+  .color-picker { display: flex; gap: 8px; margin-bottom: 14px; }
+  .color-dot { width: 22px; height: 22px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; transition: border 0.15s; }
+  .color-dot.selected { border-color: #fff; }
+  .form-actions { display: flex; gap: 8px; justify-content: flex-end; }
+  .cancel-btn { background: transparent; border: 0.5px solid #2a2a2e; color: #888; border-radius: 8px; padding: 8px 16px; font-size: 13px; cursor: pointer; font-family: 'DM Sans', sans-serif; }
+
+  /* FITNESS */
+  .workout-form { background: #1a1a1e; border: 0.5px solid #2a2a2e; border-radius: 14px; padding: 20px; margin-bottom: 24px; display: none; }
+  .workout-form.open { display: block; }
+  .form-row { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 10px; margin-bottom: 12px; }
+  .workout-form input { background: #0e0e10; border: 0.5px solid #2a2a2e; border-radius: 8px; padding: 10px 12px; color: #f0ede6; font-family: 'DM Sans', sans-serif; font-size: 14px; }
+  .workout-form input::placeholder { color: #555; }
+  .workout-log { display: flex; flex-direction: column; gap: 10px; margin-bottom: 28px; }
+  .workout-entry { background: #1a1a1e; border: 0.5px solid #2a2a2e; border-radius: 12px; padding: 14px 18px; display: flex; align-items: center; justify-content: space-between; }
+  .workout-entry .ex-name { font-family: 'Syne', sans-serif; font-size: 15px; font-weight: 600; color: #f0ede6; }
+  .workout-entry .ex-meta { font-size: 13px; color: #888; margin-top: 2px; }
+  .workout-stats { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+  .stat-pill { background: #26215c; color: #afa9ec; font-size: 12px; font-weight: 500; border-radius: 6px; padding: 4px 10px; }
+  .stat-pill.green { background: #173404; color: #97c459; }
+  .stat-pill.amber { background: #412402; color: #ef9f27; }
+  .delete-log { background: none; border: none; color: #555; cursor: pointer; font-size: 16px; padding: 4px; }
+  .delete-log:hover { color: #e24b4a; }
+
+  /* PROGRESS */
+  .progress-section { margin-top: 10px; }
+  .progress-title { font-family: 'Syne', sans-serif; font-size: 16px; font-weight: 600; margin-bottom: 14px; color: #f0ede6; }
+  .progress-bars { display: flex; flex-direction: column; gap: 12px; }
+  .pb-row { display: flex; flex-direction: column; gap: 4px; }
+  .pb-label { display: flex; justify-content: space-between; font-size: 13px; color: #888; }
+  .pb-track { height: 8px; background: #1a1a1e; border-radius: 100px; overflow: hidden; }
+  .pb-fill { height: 100%; border-radius: 100px; background: #7f77dd; transition: width 0.5s ease; }
+
+  /* SCHEDULE */
+  .schedule-section { margin-top: 28px; }
+  .days-row { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; margin-bottom: 20px; }
+  .day-cell { border-radius: 10px; padding: 10px 6px; text-align: center; border: 0.5px solid #2a2a2e; background: #1a1a1e; }
+  .day-cell.active { background: #1e1a3a; border-color: #7f77dd; }
+  .day-cell.today { border-color: #5dcaa5; }
+  .day-name { font-size: 11px; color: #555; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .day-num { font-family: 'Syne', sans-serif; font-size: 18px; font-weight: 700; color: #f0ede6; }
+  .day-dot { width: 5px; height: 5px; border-radius: 50%; background: #7f77dd; margin: 4px auto 0; opacity: 0; }
+  .day-cell.has-workout .day-dot { opacity: 1; }
+
+  /* LOADING */
+  .loading { text-align: center; padding: 40px 20px; color: #555; font-size: 14px; }
+  .spinner { width: 24px; height: 24px; border: 2px solid #2a2a2e; border-top-color: #7f77dd; border-radius: 50%; animation: spin 0.7s linear infinite; margin: 0 auto 12px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .empty-state { text-align: center; padding: 40px 20px; color: #444; font-size: 14px; }
+
+  .page { display: none; }
+  .page.active { display: block; }
+</style>
+</head>
+<body>
+<div class="app">
+  <nav class="nav">
+    <div class="nav-logo">Fit<span>Keep</span></div>
+    <div class="nav-tabs">
+      <button class="tab-btn active" onclick="showPage('notes', this)">Notes</button>
+      <button class="tab-btn" onclick="showPage('fitness', this)">Fitness</button>
+    </div>
+  </nav>
+
+  <div class="main">
+
+    <!-- NOTES PAGE -->
+    <div class="page active" id="page-notes">
+      <div class="section-header">
+        <div class="section-title">My Notes</div>
+        <button class="add-btn" onclick="toggleNoteForm()">+ New note</button>
+      </div>
+      <div class="note-form" id="note-form">
+        <input type="text" id="note-title-input" placeholder="Title">
+        <textarea id="note-body-input" placeholder="Write your note..."></textarea>
+        <div class="color-picker">
+          <div class="color-dot selected" style="background:#3a3010" data-color="color-yellow" onclick="selectColor(this)"></div>
+          <div class="color-dot" style="background:#0a2a20" data-color="color-teal" onclick="selectColor(this)"></div>
+          <div class="color-dot" style="background:#1e1a3a" data-color="color-purple" onclick="selectColor(this)"></div>
+          <div class="color-dot" style="background:#2e1410" data-color="color-coral" onclick="selectColor(this)"></div>
+          <div class="color-dot" style="background:#0a1e30" data-color="color-blue" onclick="selectColor(this)"></div>
+        </div>
+        <div class="form-actions">
+          <button class="cancel-btn" onclick="toggleNoteForm()">Cancel</button>
+          <button class="add-btn" id="save-note-btn" onclick="addNote()">Save note</button>
+        </div>
+      </div>
+      <div id="notes-grid"></div>
+    </div>
+
+    <!-- FITNESS PAGE -->
+    <div class="page" id="page-fitness">
+      <div class="section-header">
+        <div class="section-title">Workout Log</div>
+        <button class="add-btn" onclick="toggleWorkoutForm()">+ Log set</button>
+      </div>
+      <div class="workout-form" id="workout-form">
+        <div class="form-row">
+          <input type="text" id="ex-name" placeholder="Exercise (e.g. Bench Press)">
+          <input type="number" id="ex-sets" placeholder="Sets" min="1">
+          <input type="number" id="ex-reps" placeholder="Reps" min="1">
+          <input type="number" id="ex-weight" placeholder="kg" min="0">
+        </div>
+        <div class="form-actions">
+          <button class="cancel-btn" onclick="toggleWorkoutForm()">Cancel</button>
+          <button class="add-btn" id="save-workout-btn" onclick="addWorkout()">Log it</button>
+        </div>
+      </div>
+      <div class="workout-log" id="workout-log"></div>
+      <div class="progress-section">
+        <div class="progress-title">Progressive Overload Tracker</div>
+        <div class="progress-bars" id="progress-bars"></div>
+      </div>
+      <div class="schedule-section">
+        <div class="progress-title">This Week's Schedule</div>
+        <div class="days-row" id="days-row"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+  // ── SUPABASE SETUP ──────────────────────────────────────────
+  const SUPABASE_URL = 'https://zdqtddxbntuzgrjlzknb.supabase.co';
+  const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpkcXRkZHhibnR1emdyamx6a25iIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQxODM0NzUsImV4cCI6MjA4OTc1OTQ3NX0.qSHOwrYNBR7juWvQq6BnaBhKrI_qpt9-8NhYLECUD1U';
+  const { createClient } = supabase;
+  const db = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  // ── STATE ───────────────────────────────────────────────────
+  let notes = [];
+  let workouts = [];
+  let selectedColor = 'color-yellow';
+
+  // ── TOAST ───────────────────────────────────────────────────
+  function showToast(msg, isError = false) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'toast show' + (isError ? ' error' : '');
+    setTimeout(() => t.className = 'toast', 2500);
+  }
+
+  // ── PAGE SWITCH ─────────────────────────────────────────────
+  function showPage(page, btn) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('page-' + page).classList.add('active');
+    btn.classList.add('active');
+    if (page === 'fitness') { loadWorkouts(); renderSchedule(); }
+    if (page === 'notes') loadNotes();
+  }
+
+  // ── NOTES ───────────────────────────────────────────────────
+  function toggleNoteForm() {
+    document.getElementById('note-form').classList.toggle('open');
+  }
+
+  function selectColor(el) {
+    document.querySelectorAll('.color-dot').forEach(d => d.classList.remove('selected'));
+    el.classList.add('selected');
+    selectedColor = el.dataset.color;
+  }
+
+  async function loadNotes() {
+    const grid = document.getElementById('notes-grid');
+    grid.innerHTML = '<div class="loading"><div class="spinner"></div>Loading notes...</div>';
+    const { data, error } = await db.from('notes').select('*').order('created_at', { ascending: false });
+    if (error) { showToast('Could not load notes', true); return; }
+    notes = data;
+    renderNotes();
+  }
+
+  function renderNotes() {
+    const grid = document.getElementById('notes-grid');
+    if (!notes.length) {
+      grid.innerHTML = '<div class="empty-state">No notes yet. Add your first one!</div>';
+      return;
+    }
+    grid.className = 'notes-grid';
+    grid.innerHTML = notes.map(n => `
+      <div class="note-card ${n.color}">
+        <button class="note-delete" onclick="deleteNote('${n.id}')">✕</button>
+        <div class="note-title">${n.title || ''}</div>
+        <div class="note-body">${n.body || ''}</div>
+      </div>
+    `).join('');
+  }
+
+  async function addNote() {
+    const title = document.getElementById('note-title-input').value.trim();
+    const body  = document.getElementById('note-body-input').value.trim();
+    if (!title && !body) return;
+    const btn = document.getElementById('save-note-btn');
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+    const { error } = await db.from('notes').insert([{ title, body, color: selectedColor }]);
+    btn.disabled = false;
+    btn.textContent = 'Save note';
+    if (error) { showToast('Could not save note', true); return; }
+    document.getElementById('note-title-input').value = '';
+    document.getElementById('note-body-input').value = '';
+    document.getElementById('note-form').classList.remove('open');
+    showToast('Note saved! ✓');
+    loadNotes();
+  }
+
+  async function deleteNote(id) {
+    const { error } = await db.from('notes').delete().eq('id', id);
+    if (error) { showToast('Could not delete note', true); return; }
+    showToast('Note deleted');
+    loadNotes();
+  }
+
+  // ── WORKOUTS ────────────────────────────────────────────────
+  function toggleWorkoutForm() {
+    document.getElementById('workout-form').classList.toggle('open');
+  }
+
+  async function loadWorkouts() {
+    const log = document.getElementById('workout-log');
+    log.innerHTML = '<div class="loading"><div class="spinner"></div>Loading workouts...</div>';
+    const { data, error } = await db.from('workouts').select('*').order('created_at', { ascending: false });
+    if (error) { showToast('Could not load workouts', true); return; }
+    workouts = data;
+    renderWorkouts();
+    renderSchedule();
+  }
+
+  function renderWorkouts() {
+    const log = document.getElementById('workout-log');
+    if (!workouts.length) {
+      log.innerHTML = '<div class="empty-state">No workouts logged yet!</div>';
+      renderProgressBars();
+      return;
+    }
+    log.innerHTML = workouts.slice(0, 10).map(w => {
+      const prev = workouts.find(p => p.name === w.name && p.id !== w.id);
+      let badge = '';
+      if (prev) {
+        const diff = parseFloat((w.weight - prev.weight).toFixed(2));
+        if (diff > 0) badge = `<span class="stat-pill green">+${diff}kg</span>`;
+        else if (diff < 0) badge = `<span class="stat-pill amber">${diff}kg</span>`;
+        else badge = `<span class="stat-pill">same</span>`;
+      }
+      return `
+      <div class="workout-entry">
+        <div>
+          <div class="ex-name">${w.name}</div>
+          <div class="ex-meta">${w.date}</div>
+        </div>
+        <div class="workout-stats">
+          <span class="stat-pill">${w.sets}×${w.reps}</span>
+          <span class="stat-pill">${w.weight}kg</span>
+          ${badge}
+          <button class="delete-log" onclick="deleteWorkout('${w.id}')">✕</button>
+        </div>
+      </div>`;
+    }).join('');
+    renderProgressBars();
+  }
+
+  function renderProgressBars() {
+    const bars = document.getElementById('progress-bars');
+    const exercises = [...new Set(workouts.map(w => w.name))];
+    if (!exercises.length) {
+      bars.innerHTML = '<div class="empty-state">Log workouts to see your progress here</div>';
+      return;
+    }
+    bars.innerHTML = exercises.map(ex => {
+      const logs = workouts.filter(w => w.name === ex);
+      const maxW = Math.max(...logs.map(l => parseFloat(l.weight)));
+      const latestW = parseFloat(logs[0].weight);
+      const pct = maxW > 0 ? Math.round((latestW / maxW) * 100) : 100;
+      return `<div class="pb-row">
+        <div class="pb-label"><span>${ex}</span><span>${latestW}kg</span></div>
+        <div class="pb-track"><div class="pb-fill" style="width:${pct}%"></div></div>
+      </div>`;
+    }).join('');
+  }
+
+  async function addWorkout() {
+    const name   = document.getElementById('ex-name').value.trim();
+    const sets   = parseInt(document.getElementById('ex-sets').value);
+    const reps   = parseInt(document.getElementById('ex-reps').value);
+    const weight = parseFloat(document.getElementById('ex-weight').value) || 0;
+    if (!name || !sets || !reps) return;
+    const btn = document.getElementById('save-workout-btn');
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+    const today = new Date().toISOString().split('T')[0];
+    const { error } = await db.from('workouts').insert([{ name, sets, reps, weight, date: today }]);
+    btn.disabled = false;
+    btn.textContent = 'Log it';
+    if (error) { showToast('Could not save workout', true); return; }
+    document.getElementById('ex-name').value = '';
+    document.getElementById('ex-sets').value = '';
+    document.getElementById('ex-reps').value = '';
+    document.getElementById('ex-weight').value = '';
+    document.getElementById('workout-form').classList.remove('open');
+    showToast('Workout logged! 💪');
+    loadWorkouts();
+  }
+
+  async function deleteWorkout(id) {
+    const { error } = await db.from('workouts').delete().eq('id', id);
+    if (error) { showToast('Could not delete workout', true); return; }
+    showToast('Workout deleted');
+    loadWorkouts();
+  }
+
+  // ── SCHEDULE ────────────────────────────────────────────────
+  function renderSchedule() {
+    const row = document.getElementById('days-row');
+    const days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    const today = new Date();
+    const dayOfWeek = today.getDay();
+    const weekDates = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(today);
+      d.setDate(today.getDate() - dayOfWeek + i);
+      weekDates.push(d);
+    }
+    const workoutDays = new Set(workouts.map(w => w.date));
+    row.innerHTML = weekDates.map((d, i) => {
+      const dateStr = d.toISOString().split('T')[0];
+      const isToday = i === dayOfWeek;
+      const hasWorkout = workoutDays.has(dateStr);
+      return `<div class="day-cell ${isToday ? 'today' : ''} ${hasWorkout ? 'has-workout active' : ''}">
+        <div class="day-name">${days[i]}</div>
+        <div class="day-num">${d.getDate()}</div>
+        <div class="day-dot"></div>
+      </div>`;
+    }).join('');
+  }
+
+  // ── INIT ────────────────────────────────────────────────────
+  loadNotes();
+</script>
+</body>
+</html>
